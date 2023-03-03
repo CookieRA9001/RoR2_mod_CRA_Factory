@@ -1,0 +1,10 @@
+﻿{
+	"name": "CRA Factory of Vices",
+	"version_number": "1.0.0",
+	"website_url": "",
+	"description": "Many for items and stuff made by CRA Media to feed your need of even more items - some balanced, some not-so-much.",
+	"dependencies": [
+		"bbepis-BepInExPack-5.4.9",
+		"RiskofThunder-HookGenPatcher-1.2.1"
+	]
+}
