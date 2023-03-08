@@ -1,40 +1,66 @@
 using BepInEx;
 using R2API;
 using R2API.Utils;
-using RoR2;
+using System.Reflection;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
+using BepInEx.Configuration;
+using Path = System.IO.Path;
+using TILER2;
+using static TILER2.MiscUtil;
+using RoR2;
+
+// stole some stuff from https://github.com/ThinkInvis/RoR2-TinkersSatchel
+// not sorry XD
 
 namespace CRA_Factory {
-    [BepInDependency(R2API.R2API.PluginGUID)]
-    [BepInPlugin(PluginGUID, PluginName, PluginVersion)]
-    [R2APISubmoduleDependency(nameof(ItemAPI), nameof(LanguageAPI))]
+    [BepInPlugin(ModGuid, ModName, ModVer)]
+    [BepInDependency(R2API.R2API.PluginGUID, R2API.R2API.PluginVersion)]
+    [BepInDependency(TILER2Plugin.ModGuid, TILER2Plugin.ModVer)]
+    [R2APISubmoduleDependency(nameof(ItemAPI), nameof(LanguageAPI), nameof(PrefabAPI), nameof(RecalculateStatsAPI), nameof(DirectorAPI), nameof(DeployableAPI), nameof(DamageAPI))]
+    [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.EveryoneNeedSameModVersion)]
+    public class CRAPlugin: BaseUnityPlugin {
+        public const string ModVer = "0.0.1";
+        public const string ModName = "CRAFactory";
+        public const string ModGuid = "com.CookieRA.CRAFactory";
 
-    public class CRAPlugin : BaseUnityPlugin {
-        //The Plugin GUID should be a unique ID for this plugin, which is human readable (as it is used in places like the config).
-        //If we see this PluginGUID as it is on thunderstore, we will deprecate this mod. Change the PluginAuthor and the PluginName !
-        public const string PluginGUID = PluginAuthor + "." + PluginName;
-        public const string PluginAuthor = "CookieRA";
-        public const string PluginName = "CRAFactory";
-        public const string PluginVersion = "1.0.0";
+        private static ConfigFile cfgFile;
 
-        public void Awake()
-        {
+        internal static FilingDictionary<T2Module> allModules = new();
+
+        internal static AssetBundle resources;
+
+        private void Awake() {
             Log.Init(Logger);
 
-            Handler.Items.Init();
+            using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CRA_Factory.cra_bundle")) {
+                resources = AssetBundle.LoadFromStream(stream);
+            }
 
-            Log.LogInfo(nameof(Awake) + " done.");
+            cfgFile = new ConfigFile(Path.Combine(Paths.ConfigPath, ModGuid + ".cfg"), true);
+
+            var modInfo = new T2Module.ModInfo {
+                displayName = "CRA Factory of Vices",
+                longIdentifier = "CRA_Factory",
+                shortIdentifier = "CRAF",
+                mainConfigFile = cfgFile
+            };
+            allModules = T2Module.InitAll<T2Module>(modInfo);
+
+            T2Module.SetupAll_PluginAwake(allModules);
+        }
+
+        private void Start() {
+            T2Module.SetupAll_PluginStart(allModules);
         }
 
         private void Update() {
             if (Input.GetKeyDown(KeyCode.F2)) {
-                //Get the player body to use a position:
                 var transform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
-
-                //And then drop our defined item in front of the player.
-                Log.LogInfo($"Player pressed F2. Spawning our custom item at coordinates {transform.position}");
-                PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(Handler.Items.dict["ALIEN_AVOCADO_NAME"].itemIndex), transform.position, transform.forward * 20f);
+                PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(AlienAvocado.instance.itemDef.itemIndex), transform.position, transform.forward * 20f);
+            }
+            if (Input.GetKeyDown(KeyCode.F3)) {
+                var transform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+                PickupDropletController.CreatePickupDroplet(PickupCatalog.FindPickupIndex(InfinentDumbell.instance.itemDef.itemIndex), transform.position, transform.forward * 20f);
             }
         }
     }

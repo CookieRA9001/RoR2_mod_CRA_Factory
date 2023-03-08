@@ -1,49 +1,89 @@
-﻿using BepInEx;
-using R2API;
-using R2API.Utils;
-using RoR2;
+﻿using RoR2;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
+using System.Collections.ObjectModel;
+using TILER2;
+using R2API;
 
-namespace CRA_Factory.Items {
-    class AlienAvocado: _item {
-        public float health_per_hit_percent_base = 0.1f;
-        public float health_per_hit_percent_ext = 0.05f;
-        public float health_bost_base = 20;
+namespace CRA_Factory {
+	public class AlienAvocado: Item<AlienAvocado> {
+
+		////// Item Data //////
+
+		public override ItemTier itemTier => ItemTier.Tier2;
+		public override ReadOnlyCollection<ItemTag> itemTags => new(new[] { ItemTag.Healing, ItemTag.Damage });
+
+        public float health_per_hit_percent_base = 0.05f;
+        public float health_per_hit_percent_ext = 0.0025f;
+        public float health_bost_base = 50;
         public float health_bost_ext = 20;
-        public float armor_bost_base = 10;
+        public float armor_bost_base = 20;
         public float armor_bost_ext = 5;
         public float shield_bost_base = 50;
-        public float shield_bost_ext = 10;
+        public float shield_bost_ext = 20;
         public float regen_bost_base = 1;
         public float regen_bost_ext = 0.5f;
 
-        override public void Init() {
-            InitStart();
+        ////// TILER2 Module Setup //////
 
-            AddTokens(
-                "ALIEN_AVOCADO",
-                "Alien Avocado",
-                "Health out of this world"
-            );
-
-            On.RoR2.GlobalEventManager.OnHitEnemy += GlobalEventManager_OnHitEnemy;
-            On.RoR2.CharacterBody.OnInventoryChanged += CharacterBody_OnInventoryChanged;
-
-            InitFinish();
+        public AlienAvocado() {
+			modelResource = CRAPlugin.resources.LoadAsset<GameObject>("Assets/Import/AlienAvocado/object.prefab");
+			iconResource = CRAPlugin.resources.LoadAsset<Sprite>("Assets/Import/AlienAvocado/icon.png");
         }
 
-        private void GlobalEventManager_OnHitEnemy(On.RoR2.GlobalEventManager.orig_OnHitEnemy orig, GlobalEventManager self, DamageInfo damageInfo, GameObject victim) {
-            if (damageInfo == null || damageInfo.rejected || !damageInfo.attacker || damageInfo.attacker == victim.gameObject ||
-                damageInfo.attacker.GetComponent<CharacterBody>().inventory == null) {
-                orig(self, damageInfo, victim);
+        public override void SetupModifyItemDef() {
+            base.SetupModifyItemDef();
+
+            Utils.ItemUtil.AddTokens(
+                itemDef,
+                "ALIEN_AVOCADO",
+                "Alien Avocado",
+                "Health out of this world",
+                $"Get <style=cIsHealing>{health_bost_base} max health</style> <style=cStack>(+{health_bost_ext} per extra stack)</style>, " +
+                $"<style=cIsHealing>{shield_bost_base} max shield</style> <style=cStack>(+{shield_bost_ext} per extra stack)</style>, " +
+                $"<style=cIsHealing>{armor_bost_base} armor</style> <style=cStack>(+{armor_bost_ext} per extra stack)</style> and " +
+                $"<style=cIsHealing>{regen_bost_base} regen</style> <style=cStack>(+{regen_bost_ext} per extra stack)</style> to your <style=cIsHealth>base stats</style>. " +
+                $"Heal for <style=cIsHealing>{health_per_hit_percent_base*100}%</style> <style=cStack>(+{health_per_hit_percent_ext}% per extra stack)</style> " +
+                $"of <style=cIsHealth>damage dealt</style> on hit."
+            );
+        }
+
+        public override void Install() {
+			base.Install();
+			RecalculateStatsAPI.GetStatCoefficients += RecalculateStatsAPI_GetStatCoefficients;
+            On.RoR2.HealthComponent.TakeDamage += HealthComponent_TakeDamage;
+        }
+
+		public override void Uninstall() {
+			base.Uninstall();
+			RecalculateStatsAPI.GetStatCoefficients -= RecalculateStatsAPI_GetStatCoefficients;
+            On.RoR2.HealthComponent.TakeDamage -= HealthComponent_TakeDamage;
+        }
+
+        ////// Hooks //////
+
+        private void RecalculateStatsAPI_GetStatCoefficients(CharacterBody sender, RecalculateStatsAPI.StatHookEventArgs args) {
+			if (!sender) return;
+			int item_count = GetCount(sender);
+
+            if (item_count <= 0) return;
+
+            item_count--;
+            args.baseHealthAdd += health_bost_base + item_count * health_bost_ext;
+            args.baseShieldAdd += shield_bost_base + item_count * shield_bost_ext;
+            args.baseRegenAdd += regen_bost_base + item_count * regen_bost_ext;
+			args.armorAdd += armor_bost_base + item_count * armor_bost_ext;
+		}
+
+        private void HealthComponent_TakeDamage(On.RoR2.HealthComponent.orig_TakeDamage orig, HealthComponent self, DamageInfo damageInfo) {
+            orig(self, damageInfo);
+
+            if (damageInfo == null || damageInfo.rejected || !damageInfo.attacker || damageInfo.attacker == self.gameObject || damageInfo.attacker.GetComponent<CharacterBody>().inventory == null) {
                 return;
             }
 
-            int item_count = getCount(damageInfo.attacker.GetComponent<CharacterBody>());
+            int item_count = GetCount(damageInfo.attacker.GetComponent<CharacterBody>());
 
-            if (!isCountValid(item_count)) {
-                orig(self, damageInfo, victim);
+            if (item_count <= 0) {
                 return;
             }
 
@@ -51,46 +91,8 @@ namespace CRA_Factory.Items {
             if (hc) {
                 float num = health_per_hit_percent_base + (item_count - 1) * health_per_hit_percent_ext;
                 float dam = damageInfo.damage;
-                hc.Heal(num*dam, default(ProcChainMask), false);
+                hc.Heal(num * dam, default, false);
             }
-
-            orig(self, damageInfo, victim);
-        }
-
-        private void CharacterBody_OnInventoryChanged(On.RoR2.CharacterBody.orig_OnInventoryChanged orig, CharacterBody self) {
-            if (self.inventory) {
-                Log.LogInfo("CharacterBody_OnInventoryChanged");
-
-                int dif = getItemCountChangeDif(self);
-                int item_count = getCount(self);
-
-                Log.LogInfo($"{dif} {item_count}");
-
-                if (dif == 0) {
-                    orig(self);
-                    return;
-                }
-
-                Log.LogInfo($"{self.baseArmor} {self.baseRegen} {self.baseMaxHealth} {self.baseMaxShield}");
-
-                if (item_count == dif) { // prev was zero
-                    self.baseArmor += armor_bost_base;
-                    self.baseRegen += regen_bost_base;
-                    self.baseMaxHealth += health_bost_base;
-                    self.baseMaxShield += shield_bost_base;
-                    dif -= 1;
-                }
-
-                self.baseArmor += armor_bost_ext * dif;
-                self.baseRegen += regen_bost_ext * dif;
-                self.baseMaxHealth += health_bost_ext * dif;
-                self.baseMaxShield += shield_bost_ext * dif;
-
-                Log.LogInfo($"{self.baseArmor} {self.baseRegen} {self.baseMaxHealth} {self.baseMaxShield}");
-
-            }
-
-            orig(self);
         }
     }
 }
