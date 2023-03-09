@@ -8,7 +8,8 @@ CRA Factory of Vices precence:
 
 Tier 1:
 
-Nothing!
+Supliments: "I little bit of everything but not as good as the real thing"
+	Adds a bit to all your stats exponesialy~
 
 Tier 2:
 
@@ -23,6 +24,10 @@ Infinit Dumbbell Set: "More GAINS from leveling!";
 That is all for now. Tell us what you think about our products after trying them. Until then we will continue working on more vices for your plesure.
 
 ## Changelog
+
+**0.0.2**
+
+* Added to new items - Supliments
 
 **0.0.1**
 

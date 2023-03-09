@@ -51,6 +51,7 @@ namespace CRA_Factory {
 
         private void Start() {
             T2Module.SetupAll_PluginStart(allModules);
+            PrefabAssembler.Init();
         }
 
         private void Update() {
